@@ -23,7 +23,7 @@ void init_PWM1(uint16_t TOP){
 // El registro OCR1A revisa cuanto dura el pulso en PB1 (servo) en cada ciclo PWM, el servo lee el pulso y se mueve segun la posicion que le diga
 void pulso_PWM1(uint16_t pulso){
 	//OCR1A = 1000 + ((uint32_t)pulso * 4000 / 180);
-	OCR1A = 20.05 * (float)pulso + 1200.0;
+	OCR1A = 20.05 * (float)pulso + 1200.0;												// base
 	
 }
 

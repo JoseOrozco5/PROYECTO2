@@ -20,7 +20,7 @@ void init_USART()
 	
 	UCSR0B |=  (1 << TXEN0) | (1 << RXEN0 ) | (1 << RXCIE0);						// habilitar bit para recibir, transmitir y habilitar interrupción
 	UCSR0C |= (1 << UCSZ01) | (1 << UCSZ00);										// CHARACTER SIZE 8 BITS Y 1 STOP BIT
-	UBRR0 = 51;																		// BAUD RATE 9600 0.2% DE ERROR
+	UBRR0 = 103;																		// BAUD RATE 9600 0.2% DE ERROR
 }
 
 void WriteChar(char j)
@@ -30,7 +30,7 @@ void WriteChar(char j)
 	UDR0 = j;												// meter valor
 }
 
-void cadena(char* txt)												// el char* sirve para representar cadenas de texto
+void writeString(char* txt)												// el char* sirve para representar cadenas de texto
 {
 	for (uint8_t i = 0; txt[i] != '\0'; i++)
 	{

@@ -12,7 +12,7 @@
 // Setear funciones
 void init_USART();
 void WriteChar(char j);
-void cadena(char* txt);												// el char* sirve para representar cadenas de texto
+void writeString(char* txt);												// el char* sirve para representar cadenas de texto
 
 
 

@@ -12,6 +12,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <stdio.h>																		// necesaria para el sscanf
+#include <string.h>
 
 
 // Incluir librerias hechas
@@ -36,12 +37,13 @@ uint8_t modo = 0;																		// modo en el que estoy
 uint8_t antonio_banderas = 0;															// flag de modo
 uint8_t bandera_guardar = 0;															// flag de guardar
 uint8_t bandera_mostrar = 0;															// flag de mostrar
+uint8_t adafruit = 0;																	// flag para mostrar mensaje como de bienvenida
 //----------------EEPROM---------------//
 uint8_t contador_pos = 0;																// variable para guardar registro de memoria
 uint8_t pos_actual = 0;																	// posicion N
 uint16_t addresse;
 //---------------UART------------------//
-uint8_t serial = 0;																		// flag para comunicacion serial (se relaciona con main)
+uint8_t paquete = 0;																		// flag para comunicacion serial (se relaciona con main)
 uint8_t caracteres =0;																	// lo que escribo en la terminal
 char signal;																			// señal para serial
 char buffer[16];
@@ -71,34 +73,47 @@ int main(void)
 			//------------LED MODO MANUAL------------------//
 			PORTB &= ~(1 << PORTB4);
 			PORTB &= ~(1 << PORTB0);
-			PORTB |= (1 << PORTB5);
+			PORTB |= (1 << PORTB5);																// LED que indica modo manual
 			//-----------------Iniciar ADC----------------//
 			ADCSRA |= (1 << ADSC);																// se hace la lectura del adc (se llama a la interrupcion)
-			
+			adafruit = 0;	
 			break;
 			
 			case 1:
 			//------------LED MODO EEPROM--------------//
 			PORTB &= ~(1 << PORTB5);
 			PORTB &= ~(1 << PORTB4);
-			PORTB |= (1 << PORTB0);																// encender led que indique modo EEPROM
+			PORTB |= (1 << PORTB0);																// LED que indique modo EEPROM
+			adafruit = 0;
 			break;
 			
 			case 2:
 			//--------------LED MODO ADAFRUIT----------//
 			PORTB &= ~(1 << PORTB5);
 			PORTB &= ~(1 << PORTB0);
-			PORTB |= (1 << PORTB4);
-			cadena("\n");
-			cadena("Usted esta en modo Adafruit, por favor mueva un slider. \n");
-			cadena("Indique que servomotor desea mover e ingrese un valor de 0 a 255.  \n");
-			cadena("\n");
-			if (serial == 1)
+			PORTB |= (1 << PORTB4);																// LED que indica modo Adafruit
+			/*
+			if (adafruit == 0)
 			{
-				serial = 0;														// limpio bandera para proxima interaccion
-				uint8_t motor, ang;
-				if (sscanf(buffer, "%hhu, %hhu", &motor, &ang) == 2)
+				writeString("\n");
+				writeString("Usted esta en modo Adafruit, por favor mueva un slider. \n");
+				writeString("Indique que servomotor desea mover e ingrese un valor de 0 a 255. Ejemplo 1,120  \n");
+				writeString("\n");
+				adafruit = 1;
+			}*/
+			if (paquete == 1)
+			{
+				paquete = 0;														// limpio bandera para proxima interaccion
+				uint8_t motor = buffer[1] - '0';
+				uint8_t ang = 0;
+				
+				for (char *paketa = strchr(buffer, ':') + 1; *paketa; ++paketa)
 				{
+					ang	= ang * 10 + (*paketa - '0');
+				}
+				
+				/*if (sscanf(buffer, "%hhu,%hhu", &motor, &ang) == 2)
+				{*/
 					switch(motor)
 					{
 						case 1:
@@ -114,12 +129,13 @@ int main(void)
 						pulse2_PWM2(ang);
 						break;
 					}
-				}
-				else
-				{
-					cadena("Opción no valida, por favor ingrese el servomotor y angulo como \"1,180\". \n ");
-				}
-				
+				/*else{
+					writeString("Opción no valida, por favor ingrese el servomotor y angulo como \"1,180\". \n ");
+				}*/
+			//writeString(signal);
+			_delay_ms(20);	
+			motor = 0;
+			ang = 0;	
 			}
 			break;
 			
@@ -319,9 +335,8 @@ ISR(ADC_vect)
 		ADMUX |= (1 << MUX0);															// Regresamos a pot1 (PC1)
 		
 		pot4 =  adc_value;
-		servo4 = (pot4 * 180 / 255);
+		servo4 = ((pot4 * 180 + 128) / 255);
 		pulse2_PWM2(servo4);
-		
 		break;
 		
 	}
@@ -332,13 +347,16 @@ ISR(USART_RX_vect)
 {
 	signal = UDR0;																		// leer caracter enviado a la terminal
 	
-	if (signal != '\n' && caracteres < 15)												// si no presiono enter ni escribo mas de 15 caracteres pasa lo de abajo
+	if (signal != '\n' && signal != '\r' && caracteres < 15)												// si no presiono enter ni escribo mas de 15 caracteres pasa lo de abajo
 	{
 		buffer[caracteres++] = signal;													// guardo los datos que meti a la terminal en el buffer/string
+		//WriteChar(signal);
 	}
 	else
 	{
-		serial = 1;																		// enciendo flag para el main
+		paquete = 1;																		// enciendo flag para el main
+		writeString(buffer);
+		writeString("\n");
 		buffer[caracteres] = '\0';														// cierro cadena (es como poner . al final de la oracion)
 		caracteres = 0;																	// limpio variable para proxima vez
 	}
