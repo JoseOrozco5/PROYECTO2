@@ -26,6 +26,7 @@ void init_ADC();
 void setup();
 void guardar();
 void mostrar();
+void enviar_feedback(uint8_t motor, uint8_t ang);
 
 
 // variables
@@ -37,18 +38,18 @@ uint8_t modo = 0;																		// modo en el que estoy
 uint8_t antonio_banderas = 0;															// flag de modo
 uint8_t bandera_guardar = 0;															// flag de guardar
 uint8_t bandera_mostrar = 0;															// flag de mostrar
-uint8_t adafruit = 0;																	// flag para mostrar mensaje como de bienvenida
 //----------------EEPROM---------------//
 uint8_t contador_pos = 0;																// variable para guardar registro de memoria
 uint8_t pos_actual = 0;																	// posicion N
-uint16_t addresse;
 //---------------UART------------------//
 uint8_t paquete = 0;																		// flag para comunicacion serial (se relaciona con main)
 uint8_t caracteres =0;																	// lo que escribo en la terminal
 char signal;																			// señal para serial
 char buffer[16];
-
-
+uint8_t ang = 0;
+uint8_t feed_flag = 0;
+uint8_t feed_servo = 0;
+uint8_t feed_angulo = 0;
 
 
 // Main
@@ -76,7 +77,11 @@ int main(void)
 			PORTB |= (1 << PORTB5);																// LED que indica modo manual
 			//-----------------Iniciar ADC----------------//
 			ADCSRA |= (1 << ADSC);																// se hace la lectura del adc (se llama a la interrupcion)
-			adafruit = 0;	
+			if (feed_flag == 1)
+			{
+				feed_flag = 0;
+				enviar_feedback(feed_servo, feed_angulo);
+			}
 			break;
 			
 			case 1:
@@ -84,7 +89,6 @@ int main(void)
 			PORTB &= ~(1 << PORTB5);
 			PORTB &= ~(1 << PORTB4);
 			PORTB |= (1 << PORTB0);																// LED que indique modo EEPROM
-			adafruit = 0;
 			break;
 			
 			case 2:
@@ -92,28 +96,18 @@ int main(void)
 			PORTB &= ~(1 << PORTB5);
 			PORTB &= ~(1 << PORTB0);
 			PORTB |= (1 << PORTB4);																// LED que indica modo Adafruit
-			/*
-			if (adafruit == 0)
-			{
-				writeString("\n");
-				writeString("Usted esta en modo Adafruit, por favor mueva un slider. \n");
-				writeString("Indique que servomotor desea mover e ingrese un valor de 0 a 255. Ejemplo 1,120  \n");
-				writeString("\n");
-				adafruit = 1;
-			}*/
+			//---------------UART/ADAFRUIT-------------//
 			if (paquete == 1)
 			{
-				paquete = 0;														// limpio bandera para proxima interaccion
+				paquete = 0;																	// limpio bandera para proxima interaccion*/
 				uint8_t motor = buffer[1] - '0';
-				uint8_t ang = 0;
+				//uint8_t ang = 0;
 				
 				for (char *paketa = strchr(buffer, ':') + 1; *paketa; ++paketa)
 				{
 					ang	= ang * 10 + (*paketa - '0');
 				}
 				
-				/*if (sscanf(buffer, "%hhu,%hhu", &motor, &ang) == 2)
-				{*/
 					switch(motor)
 					{
 						case 1:
@@ -129,13 +123,11 @@ int main(void)
 						pulse2_PWM2(ang);
 						break;
 					}
-				/*else{
-					writeString("Opción no valida, por favor ingrese el servomotor y angulo como \"1,180\". \n ");
-				}*/
-			//writeString(signal);
-			_delay_ms(20);	
+					
+			enviar_feedback(motor, ang);
+			_delay_ms(100);
 			motor = 0;
-			ang = 0;	
+			ang = 0;
 			}
 			break;
 			
@@ -274,6 +266,13 @@ void mostrar()
 	pos_actual = (pos_actual + 1) % 4;
 }
 
+void enviar_feedback(uint8_t motor, uint8_t ang)
+{
+	char porfavor[9];
+	sprintf(porfavor, "s%u:%u", motor, ang);
+	writeString(porfavor);
+}
+
 // Interrupt routines
 ISR(ADC_vect)
 {
@@ -294,7 +293,10 @@ ISR(ADC_vect)
 		pot1 = adc_value;
 		servo1 = (pot1 * 180 / 255);													// convertir adc en angulo
 		pulso_PWM1(servo1);																// ajustar ancho de pulso
-		
+		//-----FEEDBACK-----//
+		feed_angulo = servo1;
+		feed_servo = 1;
+		feed_flag = 1;
 		break;
 		
 		case 1:
@@ -309,7 +311,10 @@ ISR(ADC_vect)
 		pot2 = adc_value;
 		servo2 = (pot2 * 180 / 255);
 		pulso2_PWM1(servo2);
-		
+		//-----FEEDBACK-----//
+		feed_angulo = servo2;
+		feed_servo = 2;
+		feed_flag = 1;
 		break;
 		
 		case 2:
@@ -323,7 +328,10 @@ ISR(ADC_vect)
 		pot3 = adc_value;
 		servo3 = (pot3 * 180 / 255);
 		pulse_PWM2(servo3);
-		
+		//-----FEEDBACK-----//
+		feed_angulo = servo3;
+		feed_servo = 3;
+		feed_flag = 1;
 		break;
 		
 		case 3:
@@ -337,6 +345,10 @@ ISR(ADC_vect)
 		pot4 =  adc_value;
 		servo4 = ((pot4 * 180 + 128) / 255);
 		pulse2_PWM2(servo4);
+		//-----FEEDBACK-----//
+		feed_angulo = servo4;
+		feed_servo = 4;
+		feed_flag = 1;
 		break;
 		
 	}
@@ -347,25 +359,42 @@ ISR(USART_RX_vect)
 {
 	signal = UDR0;																		// leer caracter enviado a la terminal
 	
-	if (signal != '\n' && signal != '\r' && caracteres < 15)												// si no presiono enter ni escribo mas de 15 caracteres pasa lo de abajo
+	if (signal != '\n' && signal != '\r' && caracteres < sizeof(buffer) - 1)												// si no presiono enter ni escribo mas de 15 caracteres pasa lo de abajo
 	{
 		buffer[caracteres++] = signal;													// guardo los datos que meti a la terminal en el buffer/string
-		//WriteChar(signal);
+		PORTC &= ~(1 << PORTC0);
 	}
-	else
+	else 
 	{
-		paquete = 1;																		// enciendo flag para el main
+		paquete = 1;																	// enciendo flag para el main
 		writeString(buffer);
 		writeString("\n");
 		buffer[caracteres] = '\0';														// cierro cadena (es como poner . al final de la oracion)
-		caracteres = 0;																	// limpio variable para proxima vez
+		//uint8_t ang = 0;
+		
+		if (buffer[0] == 'm')
+		{
+			if (buffer[1] == '1'){
+				modo = (modo + 1) %3;
+			}
+		}else{
+			for (char *paketa = strchr(buffer, ':') + 1; *paketa; ++paketa)
+			{
+				ang	= ang * 10 + (*paketa - '0');
+			}
+			PORTC |= (1 << PORTC0);
+			PORTC |= (1 << PORTC5);
+			caracteres = 0;
+		}
+		
+		
 	}
 }
 
 ISR(PCINT2_vect)
 {
 	//---------Guardar posicion EEPROM----------//
-	if (!(PIND & (1 << PORTD4)) && bandera_guardar == 0)									// Si se presiona el boton y todavia no se ha terminado de procesar la pulsación
+	if (!(PIND & (1 << PORTD4)) && bandera_guardar == 0)								// Si se presiona el boton y todavia no se ha terminado de procesar la pulsación
 	{
 		bandera_guardar = 1;
 		guardar();
@@ -383,7 +412,7 @@ ISR(PCINT2_vect)
 	}
 	
 	//------------Cambio de modo--------------//
-	if (!(PIND &(1 << PORTD6)) && antonio_banderas == 0)														// Si se apacha PD4 se le suma 1 a modo (es decir cambia de modo)
+	if (!(PIND &(1 << PORTD6)) && antonio_banderas == 0)								// Si se apacha PD4 se le suma 1 a modo (es decir cambia de modo)
 	{
 		antonio_banderas = 1;
 		modo = (modo + 1) %3;

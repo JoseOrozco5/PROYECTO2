@@ -31,6 +31,6 @@ void pulse_PWM2(uint8_t angle3)
 
 void pulse2_PWM2(uint8_t angle4)
 {
-	OCR2B = 0.19 * (float)angle4 + 5.0;
+	OCR2B = 0.17 * (float)angle4 + 5.0;
 }
 // Interrupt routines

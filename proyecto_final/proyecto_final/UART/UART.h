@@ -13,7 +13,7 @@
 void init_USART();
 void WriteChar(char j);
 void writeString(char* txt);												// el char* sirve para representar cadenas de texto
-
+void feedback();
 
 
 #endif /* UART_H_ */
